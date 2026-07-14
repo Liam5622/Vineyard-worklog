@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vineyard Work Log</title>
-<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
-<link rel="dns-prefetch" href="https://www.gstatic.com">
+<!-- Firebase v8 SDK - lightweight and fast -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Vineyard Log">
@@ -92,6 +92,14 @@
   
   .cal-day.today { border-color:var(--green); border-width:2px; }
   .cal-day.has-log { background:#8B6914; border-color:#6B4F0F; }
+  .cal-day.has-log.expanded { 
+    position:relative; z-index:10;
+    transform:scale(1.08);
+    box-shadow:0 8px 24px rgba(0,0,0,.25);
+    min-height:140px;
+    -webkit-line-clamp:unset;
+  }
+  .cal-day.has-log.expanded .log-preview { -webkit-line-clamp:unset; overflow:visible; display:block; font-size:12px; }
   .cal-day.selected { border-color:var(--gold); border-width:2.5px; box-shadow:0 0 0 3px rgba(233,196,106,.2); }
 
   .day-num { font-size:13px; font-weight:700; color:var(--mid); }
@@ -454,7 +462,7 @@
     .day-header { font-size:10px; padding:4px 0; }
     .cal-day { min-height:52px; padding:5px 4px; border-radius:7px; }
     .day-num { font-size:12px; }
-    .log-preview { display:none; }
+    .log-preview { font-size:11px; color:rgba(255,255,255,.9); line-height:1.4; overflow:hidden; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; flex:1; margin-top:3px; }
     .log-indicator { width:6px; height:6px; }
     .today-dot { width:5px; height:5px; }
 
@@ -626,13 +634,9 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<script type="module">
-// ── FIREBASE IMPORTS (must be first) ──
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-// ── FIREBASE INIT ──
-const firebaseConfig = {
+<script>
+// ── FIREBASE v8 INIT ──
+var firebaseConfig = {
   apiKey: "AIzaSyBK6Q577OkMYWVVC-CQ69hvtnRuQngyvXQ",
   authDomain: "vineyard-worklog.firebaseapp.com",
   projectId: "vineyard-worklog",
@@ -640,9 +644,8 @@ const firebaseConfig = {
   messagingSenderId: "684938789180",
   appId: "1:684938789180:web:b25dbc234c7ee315671e39"
 };
-const fbApp = initializeApp(firebaseConfig);
-const db = getFirestore(fbApp);
-const LOG_DOC = doc(db, 'worklog', 'main');
+if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+var db = firebase.firestore();
 
 // ── STATE ──
 let logs = {};
@@ -675,13 +678,13 @@ function hideLoading() {
 // ── FIREBASE LOAD/SAVE ──
 async function loadLogs() {
   try {
-    const snap = await getDoc(LOG_DOC);
-    if (snap.exists() && snap.data().logs) {
+    var snap = await db.collection('worklog').doc('main').get();
+    if (snap.exists && snap.data().logs) {
       logs = snap.data().logs;
     }
   } catch(e) {
     console.error('Firebase load error:', e);
-    showToast('⚠️ Could not connect to database');
+    // Silent fail - use cached data
   } finally {
     hideLoading();
   }
@@ -690,12 +693,21 @@ async function loadLogs() {
 async function saveLogs() {
   // Save to localStorage immediately (instant)
   try { localStorage.setItem('vwl_logs_cache', JSON.stringify(logs)); } catch(e) {}
-  // Then save to Firebase in background
-  try {
-    await setDoc(LOG_DOC, { logs, updatedAt: new Date().toISOString() });
-  } catch(e) {
-    console.error('Firebase save error:', e);
-    showToast('⚠️ Could not save to cloud — saved locally');
+  // Then save to Firebase with silent retry
+  var retries = 3;
+  while (retries > 0) {
+    try {
+      await db.collection('worklog').doc('main').set({ logs: logs, updatedAt: new Date().toISOString() });
+      break;
+    } catch(e) {
+      retries--;
+      if (retries === 0) {
+        console.warn('Firebase save failed - data saved locally');
+        showToast('📱 Saved locally — will sync when connection returns');
+      } else {
+        await new Promise(function(r) { setTimeout(r, 1500); });
+      }
+    }
   }
 }
 
@@ -733,6 +745,7 @@ function renderCalendar() {
 
     div.className = `cal-day${isToday?' today':''}${hasLog?' has-log':''}${isSelected?' selected':''}`;
     div.style.animationDelay = `${i*0.01}s`;
+    if (hasLog) div.setAttribute('data-key', key);
     div.innerHTML = `<div class="day-num">${c.day}${isToday?'<span class="today-dot"></span>':''}</div>${hasLog?`<div class="log-preview">${logs[key]}</div>`:''}`;
     div.onclick = () => clickDay(key);
     grid.appendChild(div);
@@ -744,8 +757,21 @@ function clickDay(key) {
   const d = new Date(key.split('-')[0], key.split('-')[1]-1, key.split('-')[2]);
   document.getElementById('selectedDateDisplay').textContent =
     d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
-  if (logs[key]) openModal(key);
-  else showToast('📅 Day selected — record or type your log above');
+
+  if (logs[key]) {
+    // First tap expands, second tap opens modal
+    const el = document.querySelector(`.cal-day.has-log[data-key="${key}"]`);
+    if (el && el.classList.contains('expanded')) {
+      openModal(key);
+    } else {
+      // Collapse any other expanded day first
+      document.querySelectorAll('.cal-day.expanded').forEach(d => d.classList.remove('expanded'));
+      if (el) el.classList.add('expanded');
+    }
+  } else {
+    showToast('📅 Day selected — record or type your log above');
+    document.querySelectorAll('.cal-day.expanded').forEach(d => d.classList.remove('expanded'));
+  }
   renderCalendar();
 }
 
