@@ -625,560 +625,402 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-  // ── STATE ──
-  let currentDate = new Date();
-  let selectedDate = null;
-  let logs = {};
+// ── FIREBASE IMPORTS (must be first) ──
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  let recording = false;
-  let recognition = null;
-  let viewingDate = null;
+// ── FIREBASE INIT ──
+const firebaseConfig = {
+  apiKey: "AIzaSyBK6Q577OkMYWVVC-CQ69hvtnRuQngyvXQ",
+  authDomain: "vineyard-worklog.firebaseapp.com",
+  projectId: "vineyard-worklog",
+  storageBucket: "vineyard-worklog.firebasestorage.app",
+  messagingSenderId: "684938789180",
+  appId: "1:684938789180:web:b25dbc234c7ee315671e39"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+const LOG_DOC = doc(db, 'worklog', 'main');
 
-  function dateKey(d) {
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  }
+// ── STATE ──
+let logs = {};
+let recording = false;
+let recognition = null;
+let selectedDate = null;
+let currentDate = new Date();
+let viewingDate = null;
+let pendingImportData = null;
 
-  function formatDisplay(key) {
-    const p = key.split('-');
-    return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-  }
+// ── HELPERS ──
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function formatDisplay(key) {
+  const p = key.split('-');
+  return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+function hideLoading() {
+  const ls = document.getElementById('loadingScreen');
+  ls.classList.add('hidden');
+  setTimeout(() => ls.style.display='none', 500);
+}
 
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg; t.classList.add('show');
-    setTimeout(()=>t.classList.remove('show'), 2500);
-  }
-
-  // ── CALENDAR ──
-  function renderCalendar() {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const today = new Date();
-    const todayKey = dateKey(today);
-
-    document.getElementById('monthTitle').textContent =
-      currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase();
-
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month+1, 0).getDate();
-    const daysInPrev = new Date(year, month, 0).getDate();
-
-    const grid = document.getElementById('calendarGrid');
-    grid.innerHTML = '';
-
-    let cells = [];
-
-    // Blank spacers for days before 1st
-    for (let i = 0; i < firstDay; i++) {
-      cells.push({blank: true});
+// ── FIREBASE LOAD/SAVE ──
+async function loadLogs() {
+  try {
+    const snap = await getDoc(LOG_DOC);
+    if (snap.exists() && snap.data().logs) {
+      logs = snap.data().logs;
     }
-    // Current month only
-    for (let d = 1; d <= daysInMonth; d++) {
-      cells.push({day: d, month, year, blank: false});
-    }
+  } catch(e) {
+    console.error('Firebase load error:', e);
+    showToast('⚠️ Could not connect to database');
+  } finally {
+    hideLoading();
+  }
+}
 
-    cells.forEach((c, i) => {
-      const div = document.createElement('div');
+async function saveLogs() {
+  try {
+    await setDoc(LOG_DOC, { logs, updatedAt: new Date().toISOString() });
+  } catch(e) {
+    console.error('Firebase save error:', e);
+    showToast('⚠️ Could not save — check connection');
+  }
+}
 
-      if (c.blank) {
-        div.className = 'cal-day-blank';
-        grid.appendChild(div);
-        return;
-      }
+// ── CALENDAR ──
+function renderCalendar() {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const today = new Date();
+  const todayKey = dateKey(today);
 
-      const key = `${c.year}-${String(c.month+1).padStart(2,'0')}-${String(c.day).padStart(2,'0')}`;
-      const isToday = key === todayKey;
-      const hasLog = !!logs[key];
-      const isSelected = selectedDate === key;
+  document.getElementById('monthTitle').textContent =
+    currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase();
 
-      div.className = `cal-day${isToday?' today':''}${hasLog?' has-log':''}${isSelected?' selected':''}`;
-      div.style.animationDelay = `${i*0.01}s`;
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
 
-      div.innerHTML = `<div class="day-num">${c.day}${isToday?'<span class="today-dot"></span>':''}</div>${hasLog?`<div class="log-preview">${logs[key]}</div>`:''}`;
-      div.onclick = () => clickDay(key);
+  const grid = document.getElementById('calendarGrid');
+  grid.innerHTML = '';
 
+  let cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push({blank:true});
+  for (let d = 1; d <= daysInMonth; d++) cells.push({day:d, month, year, blank:false});
+
+  cells.forEach((c, i) => {
+    const div = document.createElement('div');
+    if (c.blank) {
+      div.className = 'cal-day-blank';
       grid.appendChild(div);
-    });
-  }
-
-  function clickDay(key) {
-    selectedDate = key;
-    document.getElementById('selectedDateDisplay').textContent = formatDisplay(key).toUpperCase().split(',')[0] + ', ' + key.split('-')[2];
-
-    if (logs[key]) {
-      openModal(key);
-    } else {
-      showToast('📅 Day selected — record or type your log above');
-    }
-    renderCalendar();
-  }
-
-  function changeMonth(dir) {
-    currentDate.setMonth(currentDate.getMonth() + dir);
-    renderCalendar();
-  }
-
-  function goToday() {
-    currentDate = new Date();
-    selectedDate = dateKey(currentDate);
-    document.getElementById('selectedDateDisplay').textContent = 'TODAY';
-    renderCalendar();
-    showToast('📅 Showing today');
-  }
-
-  // ── VOICE ──
-  function toggleRecording() {
-    if (!selectedDate) {
-      showToast('⚠️ Please select a day on the calendar first');
       return;
     }
+    const key = `${c.year}-${String(c.month+1).padStart(2,'0')}-${String(c.day).padStart(2,'0')}`;
+    const isToday = key === todayKey;
+    const hasLog = !!logs[key];
+    const isSelected = selectedDate === key;
 
-    if (!recording) {
-      startRecording();
-    } else {
-      stopRecording();
-    }
-  }
-
-  function startRecording() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      showToast('⚠️ Voice not supported in this browser — please use Chrome');
-      return;
-    }
-
-    recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    let finalTranscript = document.getElementById('transcriptBox').value;
-
-    recognition.onresult = function(e) {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript + ' ';
-        } else {
-          interim += e.results[i][0].transcript;
-        }
-      }
-      document.getElementById('transcriptBox').value = finalTranscript + interim;
-    };
-
-    recognition.onerror = function(e) {
-      showToast('⚠️ Microphone error — check browser permissions');
-      stopRecording();
-    };
-
-    recognition.onend = function() {
-      if (recording) recognition.start();
-    };
-
-    recognition.start();
-    recording = true;
-    document.getElementById('micBtn').classList.add('recording');
-    document.getElementById('micBtn').textContent = '⏹';
-    document.getElementById('micStatus').textContent = '🔴 Recording... tap to stop';
-    document.getElementById('micStatus').classList.add('active');
-  }
-
-  function stopRecording() {
-    if (recognition) { recognition.stop(); recognition = null; }
-    recording = false;
-    document.getElementById('micBtn').classList.remove('recording');
-    document.getElementById('micBtn').textContent = '🎤';
-    document.getElementById('micStatus').textContent = 'Tap mic to start recording';
-    document.getElementById('micStatus').classList.remove('active');
-  }
-
-  function clearTranscript() {
-    stopRecording();
-    document.getElementById('transcriptBox').value = '';
-  }
-
-  function saveLog() {
-    if (!selectedDate) { showToast('⚠️ Please select a day on the calendar first'); return; }
-    const text = document.getElementById('transcriptBox').value.trim();
-    if (!text) { showToast('⚠️ Nothing to save — record or type a log first'); return; }
-    logs[selectedDate] = text;
-    document.getElementById('transcriptBox').value = '';
-    stopRecording();
-    renderCalendar();
-    showToast('✅ Log saved for ' + formatDisplay(selectedDate).split(',')[0]);
-  }
-
-  // ── MODAL ──
-  function openModal(key) {
-    viewingDate = key;
-    document.getElementById('modalDate').textContent = formatDisplay(key);
-    const body = document.getElementById('modalBody');
-    const footer = document.getElementById('modalFooter');
-
-    if (logs[key]) {
-      body.innerHTML = `<div class="modal-log-text">${logs[key]}</div>`;
-      footer.innerHTML = `
-        <button class="btn-delete-log" onclick="deleteLog('${key}')">🗑 Delete</button>
-        <button class="btn-edit-log" onclick="editLog('${key}')">✏️ Edit</button>`;
-    } else {
-      body.innerHTML = `<div class="modal-no-log">No log entry for this day yet.<br>Select this day and use the voice recorder above.</div>`;
-      footer.innerHTML = '';
-    }
-
-    document.getElementById('logModal').classList.add('open');
-  }
-
-  function closeModal() { document.getElementById('logModal').classList.remove('open'); }
-
-  function deleteLog(key) {
-    delete logs[key];
-    closeModal();
-    renderCalendar();
-    showToast('🗑 Log entry deleted');
-  }
-
-  function editLog(key) {
-    closeModal();
-    selectedDate = key;
-    document.getElementById('transcriptBox').value = logs[key] || '';
-    document.getElementById('selectedDateDisplay').textContent = formatDisplay(key).split(',')[0].toUpperCase();
-    renderCalendar();
-    document.getElementById('transcriptBox').focus();
-    window.scrollTo({top:0,behavior:'smooth'});
-    showToast('✏️ Edit your log above and click Save');
-  }
-
-  document.getElementById('logModal').addEventListener('click', function(e) { if(e.target===this) closeModal(); });
-  document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
-
-  // ── PRINT REPORT ──
-  function printMonthReport() {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const monthName = currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-    const daysInMonth = new Date(year, month+1, 0).getDate();
-
-    // Collect all logged days for this month
-    const entries = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      if (logs[key]) {
-        entries.push({ key, day: d, text: logs[key] });
-      }
-    }
-
-    // Set report header
-    document.getElementById('reportTitle').textContent = 'VINEYARD WORK LOG — ' + monthName.toUpperCase();
-    document.getElementById('reportSubtitle').textContent = 'Monthly Work Log Report';
-    document.getElementById('reportMeta').innerHTML = `Generated: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}<br>Total days logged: ${entries.length} of ${daysInMonth}`;
-
-    // Summary
-    document.getElementById('reportSummary').innerHTML = `
-      <div class="summary-stat"><strong>${daysInMonth}</strong><span>Days in Month</span></div>
-      <div class="summary-stat"><strong>${entries.length}</strong><span>Days Logged</span></div>
-      <div class="summary-stat"><strong>${daysInMonth - entries.length}</strong><span>Days Not Logged</span></div>
-    `;
-
-    // Entries
-    const entriesDiv = document.getElementById('reportEntries');
-    if (!entries.length) {
-      entriesDiv.innerHTML = '<div class="report-no-entries">No work log entries found for ' + monthName + '.</div>';
-    } else {
-      entriesDiv.innerHTML = entries.map(e => `
-        <div class="report-entry">
-          <div class="report-entry-date">${formatDisplay(e.key)}</div>
-          <div class="report-entry-text">${e.text}</div>
-        </div>`).join('');
-    }
-
-    document.getElementById('printReport').classList.add('open');
-    window.scrollTo(0,0);
-  }
-
-  function closeReport() {
-    document.getElementById('printReport').classList.remove('open');
-  }
-
-  function downloadMonthReport() {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const monthName = currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-    const daysInMonth = new Date(year, month+1, 0).getDate();
-
-    // Collect entries
-    const entries = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      if (logs[key]) {
-        const date = new Date(year, month, d).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-        entries.push({ date, text: logs[key] });
-      }
-    }
-
-    // Build a clean printable HTML page
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Vineyard Work Log — ${monthName}</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Vineyard Log">
-<meta name="theme-color" content="#4A3728">
-<meta name="mobile-web-app-capable" content="yes">
-<style>
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'DM Sans',sans-serif; background:white; color:#1a1a1a; padding:48px 52px; max-width:860px; margin:0 auto; }
-  .report-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:#C4A882; margin-bottom:4px; }
-  .report-title { font-family:'Bebas Neue',sans-serif; font-size:46px; letter-spacing:3px; color:#1a1a1a; line-height:1; }
-  .report-month { font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:2px; color:#4A3728; margin-top:4px; }
-  .report-header { border-bottom:3px solid #2a1a0a; padding-bottom:20px; margin-bottom:28px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; }
-  .report-meta { text-align:right; font-size:12px; color:#888; line-height:1.8; }
-  .report-meta strong { color:#4A3728; }
-  .summary { background:#FBF7F0; border:1.5px solid #E8D8BC; border-radius:10px; padding:16px 24px; margin-bottom:28px; display:flex; gap:0; }
-  .s-stat { flex:1; text-align:center; border-right:1px solid #E8D8BC; padding:0 16px; }
-  .s-stat:last-child { border-right:none; }
-  .s-stat strong { font-family:'Bebas Neue',sans-serif; font-size:32px; color:#4A3728; display:block; }
-  .s-stat span { font-size:11px; color:#9B8B7A; text-transform:uppercase; letter-spacing:.5px; }
-  .entries-title { font-family:'Bebas Neue',sans-serif; font-size:15px; letter-spacing:2px; color:#9B8B7A; margin-bottom:20px; padding-bottom:8px; border-bottom:1px solid #e8d8bc; }
-  .entry { margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid #ede4d4; page-break-inside:avoid; }
-  .entry:last-child { border-bottom:none; }
-  .entry-date { font-family:'Bebas Neue',sans-serif; font-size:17px; letter-spacing:1px; color:#2a1a0a; margin-bottom:8px; display:flex; align-items:center; gap:10px; }
-  .entry-date::after { content:''; flex:1; height:1px; background:#ddd; }
-  .entry-text { font-size:13.5px; color:#333; line-height:1.8; padding:12px 16px; background:#faf7f2; border-left:3px solid #C4A882; border-radius:0 8px 8px 0; }
-  .no-entries { text-align:center; padding:60px; color:#aaa; font-style:italic; }
-  .footer { margin-top:40px; padding-top:16px; border-top:1px solid #ede4d4; display:flex; justify-content:space-between; font-size:11px; color:#bbb; }
-  @media print { body { padding:32px 40px; } }
-</style>
-</head>
-<body>
-  <div class="report-header">
-    <div>
-      <div class="report-label">Monthly Work Log Report</div>
-      <div class="report-title">VINEYARD WORK LOG</div>
-      <div class="report-month">${monthName.toUpperCase()}</div>
-    </div>
-    <div class="report-meta">
-      Generated: <strong>${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</strong><br>
-      Days Logged: <strong>${entries.length} of ${daysInMonth}</strong>
-    </div>
-  </div>
-  <div class="summary">
-    <div class="s-stat"><strong>${daysInMonth}</strong><span>Days in Month</span></div>
-    <div class="s-stat"><strong>${entries.length}</strong><span>Days Logged</span></div>
-    <div class="s-stat"><strong>${daysInMonth - entries.length}</strong><span>Not Logged</span></div>
-  </div>
-  <div class="entries-title">DAILY LOG ENTRIES</div>
-  ${entries.length ? entries.map(e => `
-    <div class="entry">
-      <div class="entry-date">${e.date}</div>
-      <div class="entry-text">${e.text}</div>
-    </div>`).join('') : '<div class="no-entries">No log entries for this month.</div>'}
-  <div class="footer">
-    <span>Vineyard Work Log</span>
-    <span>${monthName} · Page 1 of 1</span>
-  </div>
-</body>
-</html>`;
-
-    // Open in new tab so user can Save as PDF via browser print
-    const blob = new Blob([html], {type: 'text/html'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `vineyard-worklog-${monthName.replace(' ','-')}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('⬇️ Report downloaded — open file and print to save as PDF');
-  }
-
-  // ── EXPORT ──
-  function exportData() {
-    const exportObj = {
-      exportDate: new Date().toISOString(),
-      appName: 'Vineyard Work Log',
-      totalEntries: Object.keys(logs).length,
-      logs: logs
-    };
-    const json = JSON.stringify(exportObj, null, 2);
-    const blob = new Blob([json], {type: 'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const month = currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'}).replace(' ','-');
-    a.download = `vineyard-worklog-backup-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('✅ Backup downloaded successfully');
-  }
-
-  // ── IMPORT ──
-  let pendingImportData = null;
-
-  function importData(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        const parsed = JSON.parse(e.target.result);
-        // Support both raw logs object and wrapped export format
-        if (parsed.logs) {
-          pendingImportData = parsed.logs;
-          const count = Object.keys(parsed.logs).length;
-          document.getElementById('importPreview').textContent = `Found ${count} log entries from backup dated ${parsed.exportDate ? new Date(parsed.exportDate).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : 'unknown date'}`;
-        } else if (typeof parsed === 'object') {
-          pendingImportData = parsed;
-          const count = Object.keys(parsed).length;
-          document.getElementById('importPreview').textContent = `Found ${count} log entries in file`;
-        } else {
-          showToast('⚠️ Invalid backup file format');
-          return;
-        }
-        document.getElementById('importOverlay').classList.add('open');
-      } catch(err) {
-        showToast('⚠️ Could not read file — make sure it is a valid JSON backup');
-      }
-      // Reset file input so same file can be re-imported if needed
-      event.target.value = '';
-    };
-    reader.readAsText(file);
-  }
-
-  function cancelImport() {
-    pendingImportData = null;
-    document.getElementById('importOverlay').classList.remove('open');
-  }
-
-  function confirmImport() {
-    if (!pendingImportData) return;
-    logs = pendingImportData;
-    pendingImportData = null;
-    document.getElementById('importOverlay').classList.remove('open');
-    renderCalendar();
-    showToast('✅ Backup imported successfully — ' + Object.keys(logs).length + ' entries loaded');
-  }
-
-  document.getElementById('importOverlay').addEventListener('click', function(e) {
-    if (e.target === this) cancelImport();
+    div.className = `cal-day${isToday?' today':''}${hasLog?' has-log':''}${isSelected?' selected':''}`;
+    div.style.animationDelay = `${i*0.01}s`;
+    div.innerHTML = `<div class="day-num">${c.day}${isToday?'<span class="today-dot"></span>':''}</div>${hasLog?`<div class="log-preview">${logs[key]}</div>`:''}`;
+    div.onclick = () => clickDay(key);
+    grid.appendChild(div);
   });
+}
 
-  // ── PASSWORD ──
-  function checkPassword() {
-    const val = document.getElementById('pwInput').value;
-    if (val === '2590') {
-      document.getElementById('landingPage').classList.add('hidden');
-      sessionStorage.setItem('vwl_auth','1');
-    } else {
-      const inp = document.getElementById('pwInput');
-      document.getElementById('pwError').textContent = 'Incorrect password. Please try again.';
-      inp.classList.remove('shake');
-      void inp.offsetWidth;
-      inp.classList.add('shake');
-      inp.value = '';
-    }
-  }
+function clickDay(key) {
+  selectedDate = key;
+  const d = new Date(key.split('-')[0], key.split('-')[1]-1, key.split('-')[2]);
+  document.getElementById('selectedDateDisplay').textContent =
+    d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
+  if (logs[key]) openModal(key);
+  else showToast('📅 Day selected — record or type your log above');
+  renderCalendar();
+}
 
-  function togglePw() {
-    const inp = document.getElementById('pwInput');
-    const btn = document.getElementById('pwToggle');
-    if (inp.type === 'password') { inp.type='text'; btn.textContent='🙈'; }
-    else { inp.type='password'; btn.textContent='👁'; }
-  }
+function changeMonth(dir) {
+  currentDate.setMonth(currentDate.getMonth() + dir);
+  renderCalendar();
+}
 
-  document.getElementById('pwInput').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') checkPassword();
-  });
+window.changeMonth = changeMonth;
 
-  if (sessionStorage.getItem('vwl_auth') === '1') {
-    document.getElementById('landingPage').classList.add('hidden');
-  }
-
-  // ── FIREBASE ──
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBK6Q577OkMYWVVC-CQ69hvtnRuQngyvXQ",
-    authDomain: "vineyard-worklog.firebaseapp.com",
-    projectId: "vineyard-worklog",
-    storageBucket: "vineyard-worklog.firebasestorage.app",
-    messagingSenderId: "684938789180",
-    appId: "1:684938789180:web:b25dbc234c7ee315671e39"
-  };
-
-  const fbApp = initializeApp(firebaseConfig);
-  const db = getFirestore(fbApp);
-  const LOG_DOC = doc(db, 'worklog', 'main');
-
-  async function loadLogs() {
-    try {
-      const snap = await getDoc(LOG_DOC);
-      if (snap.exists() && snap.data().logs) {
-        logs = snap.data().logs;
-      }
-    } catch(e) {
-      console.error('Firebase load error:', e);
-      showToast('⚠️ Could not load data from database');
-    } finally {
-      document.getElementById('loadingScreen').classList.add('hidden');
-      setTimeout(() => { document.getElementById('loadingScreen').style.display='none'; }, 500);
-    }
-  }
-
-  async function saveLogs() {
-    try {
-      await setDoc(LOG_DOC, { logs, updatedAt: new Date().toISOString() });
-    } catch(e) {
-      console.error('Firebase save error:', e);
-      showToast('⚠️ Could not save to database');
-    }
-  }
-
-  // Wrap saveLog to also save to Firebase
-  const _origSaveLog = saveLog;
-  saveLog = async function() {
-    if (!selectedDate) { showToast('⚠️ Please select a day on the calendar first'); return; }
-    const text = document.getElementById('transcriptBox').value.trim();
-    if (!text) { showToast('⚠️ Nothing to save — record or type a log first'); return; }
-    logs[selectedDate] = text;
-    document.getElementById('transcriptBox').value = '';
-    stopRecording();
-    await saveLogs();
-    renderCalendar();
-    showToast('✅ Log saved for ' + formatDisplay(selectedDate).split(',')[0]);
-  };
-
-  // Wrap deleteLog to also save to Firebase
-  const _origDeleteLog = deleteLog;
-  deleteLog = async function(key) {
-    delete logs[key];
-    await saveLogs();
-    closeModal();
-    renderCalendar();
-    showToast('🗑 Log entry deleted');
-  };
-
-  // Wrap confirmImport to also save to Firebase
-  const _origConfirmImport = confirmImport;
-  confirmImport = async function() {
-    if (!pendingImportData) return;
-    logs = pendingImportData;
-    pendingImportData = null;
-    document.getElementById('importOverlay').classList.remove('open');
-    await saveLogs();
-    renderCalendar();
-    showToast('✅ Backup imported — ' + Object.keys(logs).length + ' entries loaded');
-  };
-
-  // ── INIT ──
-  selectedDate = dateKey(new Date());
+function goToday() {
+  currentDate = new Date();
+  selectedDate = dateKey(currentDate);
   document.getElementById('selectedDateDisplay').textContent = 'TODAY';
+  renderCalendar();
+  showToast('📅 Showing today');
+}
+window.goToday = goToday;
 
-  loadLogs().then(() => {
-    renderCalendar();
-  });
+// ── VOICE ──
+function toggleRecording() {
+  if (!selectedDate) { showToast('⚠️ Please select a day on the calendar first'); return; }
+  if (!recording) startRecording(); else stopRecording();
+}
+window.toggleRecording = toggleRecording;
+
+function startRecording() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('⚠️ Use Chrome for voice recording'); return; }
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+  let final = document.getElementById('transcriptBox').value;
+  recognition.onresult = function(e) {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript + ' ';
+      else interim += e.results[i][0].transcript;
+    }
+    document.getElementById('transcriptBox').value = final + interim;
+  };
+  recognition.onerror = function() { showToast('⚠️ Microphone error'); stopRecording(); };
+  recognition.onend = function() { if (recording) recognition.start(); };
+  recognition.start();
+  recording = true;
+  document.getElementById('micBtn').classList.add('recording');
+  document.getElementById('micBtn').textContent = '⏹';
+  document.getElementById('micStatus').textContent = '🔴 Recording... tap to stop';
+  document.getElementById('micStatus').classList.add('active');
+}
+
+function stopRecording() {
+  if (recognition) { recognition.stop(); recognition = null; }
+  recording = false;
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('micBtn').textContent = '🎤';
+  document.getElementById('micStatus').textContent = 'Tap mic to start recording';
+  document.getElementById('micStatus').classList.remove('active');
+}
+
+function clearTranscript() {
+  stopRecording();
+  document.getElementById('transcriptBox').value = '';
+}
+window.clearTranscript = clearTranscript;
+
+async function saveLog() {
+  if (!selectedDate) { showToast('⚠️ Please select a day first'); return; }
+  const text = document.getElementById('transcriptBox').value.trim();
+  if (!text) { showToast('⚠️ Nothing to save'); return; }
+  logs[selectedDate] = text;
+  document.getElementById('transcriptBox').value = '';
+  stopRecording();
+  await saveLogs();
+  renderCalendar();
+  showToast('✅ Log saved for ' + formatDisplay(selectedDate).split(',')[0]);
+}
+window.saveLog = saveLog;
+
+// ── MODAL ──
+function openModal(key) {
+  viewingDate = key;
+  document.getElementById('modalDate').textContent = formatDisplay(key);
+  const body = document.getElementById('modalBody');
+  const footer = document.getElementById('modalFooter');
+  if (logs[key]) {
+    body.innerHTML = `<div class="modal-log-text">${logs[key]}</div>`;
+    footer.innerHTML = `<button class="btn-delete-log" onclick="deleteLog('${key}')">🗑 Delete</button><button class="btn-edit-log" onclick="editLog('${key}')">✏️ Edit</button>`;
+  } else {
+    body.innerHTML = `<div class="modal-no-log">No log for this day yet.</div>`;
+    footer.innerHTML = '';
+  }
+  document.getElementById('logModal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('logModal').classList.remove('open'); }
+window.closeModal = closeModal;
+
+async function deleteLog(key) {
+  delete logs[key];
+  await saveLogs();
+  closeModal();
+  renderCalendar();
+  showToast('🗑 Log entry deleted');
+}
+window.deleteLog = deleteLog;
+
+function editLog(key) {
+  closeModal();
+  selectedDate = key;
+  document.getElementById('transcriptBox').value = logs[key] || '';
+  const d = new Date(key.split('-')[0], key.split('-')[1]-1, key.split('-')[2]);
+  document.getElementById('selectedDateDisplay').textContent = d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
+  renderCalendar();
+  document.getElementById('transcriptBox').focus();
+  window.scrollTo({top:0,behavior:'smooth'});
+  showToast('✏️ Edit your log above and click Save');
+}
+window.editLog = editLog;
+
+document.getElementById('logModal').addEventListener('click', function(e) { if(e.target===this) closeModal(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+
+// ── EXPORT ──
+function exportData() {
+  const exportObj = { exportDate: new Date().toISOString(), appName: 'Vineyard Work Log', totalEntries: Object.keys(logs).length, logs };
+  const blob = new Blob([JSON.stringify(exportObj, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `vineyard-worklog-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ Backup downloaded');
+}
+window.exportData = exportData;
+
+// ── IMPORT ──
+function importData(event) {
+  const file = event.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      pendingImportData = parsed.logs || parsed;
+      const count = Object.keys(pendingImportData).length;
+      document.getElementById('importPreview').textContent = `Found ${count} log entries`;
+      document.getElementById('importOverlay').classList.add('open');
+    } catch(err) { showToast('⚠️ Invalid backup file'); }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+window.importData = importData;
+
+function cancelImport() { pendingImportData = null; document.getElementById('importOverlay').classList.remove('open'); }
+window.cancelImport = cancelImport;
+
+async function confirmImport() {
+  if (!pendingImportData) return;
+  logs = pendingImportData;
+  pendingImportData = null;
+  document.getElementById('importOverlay').classList.remove('open');
+  await saveLogs();
+  renderCalendar();
+  showToast('✅ ' + Object.keys(logs).length + ' entries imported');
+}
+window.confirmImport = confirmImport;
+
+document.getElementById('importOverlay').addEventListener('click', function(e) { if(e.target===this) cancelImport(); });
+
+// ── PRINT REPORT ──
+function printMonthReport() {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthName = currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const entries = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if (logs[key]) entries.push({key, text:logs[key]});
+  }
+  document.getElementById('reportTitle').textContent = 'VINEYARD WORK LOG — ' + monthName.toUpperCase();
+  document.getElementById('reportSubtitle').textContent = 'Monthly Work Log Report';
+  document.getElementById('reportMeta').innerHTML = `Generated: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}<br>Days logged: ${entries.length} of ${daysInMonth}`;
+  document.getElementById('reportSummary').innerHTML = `<div class="summary-stat"><strong>${daysInMonth}</strong><span>Days in Month</span></div><div class="summary-stat"><strong>${entries.length}</strong><span>Days Logged</span></div><div class="summary-stat"><strong>${daysInMonth-entries.length}</strong><span>Not Logged</span></div>`;
+  document.getElementById('reportEntries').innerHTML = entries.length
+    ? entries.map(e=>`<div class="report-entry"><div class="report-entry-date">${formatDisplay(e.key)}</div><div class="report-entry-text">${e.text}</div></div>`).join('')
+    : '<div class="report-no-entries">No entries for this month.</div>';
+  document.getElementById('printReport').classList.add('open');
+  window.scrollTo(0,0);
+}
+window.printMonthReport = printMonthReport;
+
+function closeReport() { document.getElementById('printReport').classList.remove('open'); }
+window.closeReport = closeReport;
+
+function downloadMonthReport() {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthName = currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const entries = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if (logs[key]) {
+      const date = new Date(year, month, d).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      entries.push({date, text:logs[key]});
+    }
+  }
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vineyard Work Log — ${monthName}</title>
+  <style>body{font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#1a1a1a}
+  .title{font-size:36px;font-weight:900;letter-spacing:2px;margin-bottom:4px}
+  .month{font-size:22px;color:#4A3728;margin-bottom:4px}
+  .header{border-bottom:3px solid #2a1a0a;padding-bottom:16px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end}
+  .meta{text-align:right;font-size:12px;color:#888;line-height:1.8}
+  .summary{background:#FBF7F0;border:1px solid #E8D8BC;border-radius:8px;padding:14px 20px;margin-bottom:24px;display:flex}
+  .s{flex:1;text-align:center;border-right:1px solid #E8D8BC;padding:0 12px}
+  .s:last-child{border-right:none}
+  .s strong{font-size:28px;font-weight:900;color:#4A3728;display:block}
+  .s span{font-size:10px;color:#9B8B7A;text-transform:uppercase;letter-spacing:.5px}
+  .entry{margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid #ede4d4;page-break-inside:avoid}
+  .entry:last-child{border-bottom:none}
+  .date{font-size:15px;font-weight:700;color:#2a1a0a;margin-bottom:8px}
+  .text{font-size:13px;color:#333;line-height:1.8;padding:10px 14px;background:#faf7f2;border-left:3px solid #C4A882}
+  .footer{margin-top:32px;padding-top:14px;border-top:1px solid #ede4d4;display:flex;justify-content:space-between;font-size:11px;color:#bbb}
+  @media print{body{padding:24px}}</style></head><body>
+  <div class="header"><div><div class="title">VINEYARD WORK LOG</div><div class="month">${monthName.toUpperCase()}</div></div>
+  <div class="meta">Generated: <strong>${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</strong><br>Days Logged: <strong>${entries.length} of ${daysInMonth}</strong></div></div>
+  <div class="summary"><div class="s"><strong>${daysInMonth}</strong><span>Days in Month</span></div><div class="s"><strong>${entries.length}</strong><span>Days Logged</span></div><div class="s"><strong>${daysInMonth-entries.length}</strong><span>Not Logged</span></div></div>
+  ${entries.map(e=>`<div class="entry"><div class="date">${e.date}</div><div class="text">${e.text}</div></div>`).join('')}
+  <div class="footer"><span>Vineyard Work Log</span><span>${monthName} · Page 1 of 1</span></div>
+  </body></html>`;
+  const blob = new Blob([html], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `vineyard-worklog-${monthName.replace(' ','-')}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('⬇️ Report downloaded — open and print to save as PDF');
+}
+window.downloadMonthReport = downloadMonthReport;
+
+// ── PASSWORD ──
+function checkPassword() {
+  const val = document.getElementById('pwInput').value;
+  if (val === '2590') {
+    document.getElementById('landingPage').classList.add('hidden');
+    sessionStorage.setItem('vwl_auth','1');
+  } else {
+    const inp = document.getElementById('pwInput');
+    document.getElementById('pwError').textContent = 'Incorrect password. Please try again.';
+    inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake');
+    inp.value = '';
+  }
+}
+window.checkPassword = checkPassword;
+
+function togglePw() {
+  const inp = document.getElementById('pwInput'), btn = document.getElementById('pwToggle');
+  if (inp.type==='password'){inp.type='text';btn.textContent='🙈';}
+  else{inp.type='password';btn.textContent='👁';}
+}
+window.togglePw = togglePw;
+
+document.getElementById('pwInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') checkPassword();
+});
+
+if (sessionStorage.getItem('vwl_auth') === '1') {
+  document.getElementById('landingPage').classList.add('hidden');
+}
+
+// ── INIT ──
+selectedDate = dateKey(new Date());
+document.getElementById('selectedDateDisplay').textContent = 'TODAY';
+loadLogs().then(() => renderCalendar());
+
 </script>
 </body>
 </html>
