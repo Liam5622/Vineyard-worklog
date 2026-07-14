@@ -555,14 +555,7 @@
   // ── STATE ──
   let currentDate = new Date();
   let selectedDate = null;
-  let logs = {
-    // Sample data
-    [dateKey(new Date())]: "Checked all vine rows for pest damage. Found some mildew on the east block — applied sulfur spray to affected area. Irrigation running well. Temperature hit 94°F, opened shade cloth on the south facing rows.",
-    [dateKey(new Date(new Date().setDate(new Date().getDate()-2)))]: "Pruned back the Fry muscadine vines on row 12 through 18. Removed dead canes and tied new growth to trellis wires. Noticed good bud development on the Supreme block.",
-    [dateKey(new Date(new Date().setDate(new Date().getDate()-5)))]: "Harvested first pick of Supreme muscadines from the north block. Approximately 200 lbs total. Packed into clamshells and moved to cold storage. Quality looks excellent this year.",
-    [dateKey(new Date(new Date().setDate(new Date().getDate()-8)))]: "Soil moisture test across all blocks. Applied potassium fertilizer to the Carlos block — levels were low. Repaired two broken trellis posts on row 7. Mowed between rows.",
-    [dateKey(new Date(new Date().setDate(new Date().getDate()-1)))]: "Walked all rows after last night's rain. Looking for standing water and vine damage. Everything looks good. Checked bird netting — one section loose on the west end, secured it back.",
-  };
+  let logs = {};
 
   let recording = false;
   let recognition = null;
