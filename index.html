@@ -75,6 +75,8 @@
   .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
 
   .cal-day {
+    overflow: hidden !important;
+    max-height: 90px !important;
     background: var(--white);
     border: 1.5px solid var(--border);
     border-radius: 10px;
@@ -100,17 +102,7 @@
   .cal-day.has-log .day-num { color:#fff; font-weight:700; }
   .today-dot { width:6px; height:6px; border-radius:50%; background:var(--green); display:inline-block; margin-left:4px; }
 
-  .log-preview {
-    font-size:10px;
-    color:var(--mid);
-    line-height:1.4;
-    overflow:hidden;
-    display:-webkit-box;
-    -webkit-line-clamp:3;
-    -webkit-box-orient:vertical;
-    flex:1;
-  }
-  .cal-day.has-log .log-preview { color:rgba(255,255,255,.85); font-weight:500; }
+
 
   .log-indicator { width:8px; height:8px; border-radius:50%; background:var(--green); flex-shrink:0; margin-top:2px; }
 
@@ -796,7 +788,7 @@ function renderCalendar() {
     div.className = `cal-day${isToday?' today':''}${hasLog?' has-log':''}${isSelected?' selected':''}`;
     div.style.animationDelay = `${i*0.01}s`;
     if (hasLog) div.setAttribute('data-key', key);
-    div.innerHTML = `<div class="day-num">${c.day}${isToday?'<span class="today-dot"></span>':''}</div>${hasLog?'<div class="log-dot"></div>':''}`;
+    div.innerHTML = '<div class="day-num">' + c.day + (isToday ? '<span class="today-dot"></span>' : '') + '</div>' + (hasLog ? '<div class="log-dot"></div>' : '');
     div.onclick = () => clickDay(key);
     grid.appendChild(div);
   });
