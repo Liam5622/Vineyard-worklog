@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vineyard Work Log</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #C4A882;
+    --green-light: #D4BC9A;
+    --green-pale: #FAF4EA;
+    --gold: #e9c46a;
+    --dark: #4A3728;
+    --mid: #9B8B7A;
+    --light: #FBF7F0;
+    --white: #fff;
+    --border: #E8D8BC;
+    --red: #e63946;
+    --purple: #6b3fa0;
+    --purple-light: #f3eeff;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'DM Sans',sans-serif; background:var(--light); color:var(--dark); min-height:100vh; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes modalIn { from{opacity:0;transform:scale(.94) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
+  @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:.85} }
+
+  /* HEADER */
+  .app-header {
+    background: var(--dark);
+    padding: 28px 40px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .app-header h1 { font-family:'Bebas Neue',sans-serif; font-size:42px; letter-spacing:3px; color:var(--white); line-height:1; }
+  .app-header h1 span { color:var(--gold); }
+  .app-header p { color:#8fba9f; font-size:13px; margin-top:4px; }
+  .header-right { display:flex; gap:12px; align-items:center; }
+
+  /* NAV MONTHS */
+  .calendar-nav {
+    background: var(--white);
+    border-bottom: 2px solid var(--border);
+    padding: 14px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  }
+  .month-title { font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:2px; color:var(--dark); }
+  .nav-btns { display:flex; gap:8px; }
+  .nav-btn { background:none; border:2px solid var(--border); border-radius:8px; padding:7px 16px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; color:var(--mid); cursor:pointer; transition:all .18s; }
+  .nav-btn:hover { border-color:var(--green); color:var(--green); }
+  .btn-today { background:var(--green); color:white; border:none; border-radius:8px; padding:7px 16px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-today:hover { background:var(--dark); }
+
+  /* CALENDAR GRID */
+  .calendar-wrap { padding: 24px 40px 40px; max-width:1100px; margin:0 auto; }
+  .day-headers { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:6px; }
+  .day-header { text-align:center; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--mid); padding:6px 0; }
+  .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+
+  .cal-day {
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    min-height: 90px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all .18s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    animation: fadeUp .3s ease both;
+  }
+  .cal-day:hover { border-color:var(--green-light); box-shadow:0 4px 16px rgba(45,106,79,.12); transform:translateY(-2px); }
+  .cal-day-blank { background:transparent; border:none; min-height:90px; }
+  
+  .cal-day.today { border-color:var(--green); border-width:2px; }
+  .cal-day.has-log { background:#8B6914; border-color:#6B4F0F; }
+  .cal-day.selected { border-color:var(--gold); border-width:2.5px; box-shadow:0 0 0 3px rgba(233,196,106,.2); }
+
+  .day-num { font-size:13px; font-weight:700; color:var(--mid); }
+  .cal-day.today .day-num { color:var(--green); }
+  .cal-day.has-log .day-num { color:#fff; font-weight:700; }
+  .today-dot { width:6px; height:6px; border-radius:50%; background:var(--green); display:inline-block; margin-left:4px; }
+
+  .log-preview {
+    font-size:10px;
+    color:var(--mid);
+    line-height:1.4;
+    overflow:hidden;
+    display:-webkit-box;
+    -webkit-line-clamp:3;
+    -webkit-box-orient:vertical;
+    flex:1;
+  }
+  .cal-day.has-log .log-preview { color:rgba(255,255,255,.85); font-weight:500; }
+
+  .log-indicator { width:8px; height:8px; border-radius:50%; background:var(--green); flex-shrink:0; margin-top:2px; }
+
+  /* VOICE SECTION */
+  .voice-section {
+    background: var(--dark);
+    padding: 24px 40px;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .voice-card {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 14px;
+    padding: 20px;
+    flex: 1;
+    min-width: 280px;
+  }
+
+  .voice-card-title { font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:1.5px; color:var(--green-light); margin-bottom:12px; }
+
+  .mic-btn {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    background: var(--green);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    transition: all .18s;
+    margin: 0 auto 12px;
+    box-shadow: 0 4px 20px rgba(45,106,79,.4);
+  }
+  .mic-btn:hover { background:var(--green-light); transform:scale(1.05); }
+  .mic-btn.recording { background:var(--red); animation:pulse 1s ease infinite; box-shadow:0 4px 20px rgba(230,57,70,.5); }
+  .mic-status { text-align:center; font-size:12px; color:#8fba9f; margin-bottom:12px; min-height:18px; }
+  .mic-status.active { color:#ff9999; font-weight:600; }
+
+  .transcript-box {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px 12px;
+    border: 1.5px solid rgba(255,255,255,.15);
+    border-radius: 8px;
+    background: rgba(255,255,255,.04);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    resize: vertical;
+    outline: none;
+    line-height: 1.55;
+  }
+  .transcript-box::placeholder { color:rgba(255,255,255,.3); font-style:italic; }
+  .transcript-box:focus { border-color:var(--green-light); background:rgba(255,255,255,.07); }
+
+  .voice-actions { display:flex; gap:8px; margin-top:10px; justify-content:flex-end; }
+  .btn-save-log { background:var(--green); color:white; border:none; border-radius:8px; padding:9px 20px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; cursor:pointer; transition:background .18s; }
+  .btn-save-log:hover { background:var(--green-light); color:var(--dark); }
+  .btn-clear { background:none; border:1.5px solid rgba(255,255,255,.2); border-radius:8px; padding:9px 14px; font-family:'DM Sans',sans-serif; font-size:13px; color:rgba(255,255,255,.6); cursor:pointer; }
+  .btn-clear:hover { border-color:var(--red); color:#ff9999; }
+
+  .selected-date-display {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+  .selected-date-hint { font-size:11px; color:#8fba9f; margin-bottom:14px; }
+
+  /* LOG MODAL */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:500; justify-content:center; align-items:center; padding:20px; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--white); border-radius:18px; width:100%; max-width:540px; box-shadow:0 20px 60px rgba(0,0,0,.3); animation:modalIn .22s ease; overflow:hidden; }
+  .modal-header { background:var(--dark); padding:18px 24px; display:flex; justify-content:space-between; align-items:center; }
+  .modal-header h2 { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:2px; color:var(--white); }
+  .modal-header h2 span { color:var(--gold); }
+  .modal-date { font-size:12px; color:#8fba9f; margin-top:2px; }
+  .modal-close { background:none; border:none; color:#8fba9f; font-size:22px; cursor:pointer; }
+  .modal-close:hover { color:white; }
+  .modal-body { padding:24px; }
+  .modal-log-text { font-size:14px; color:var(--dark); line-height:1.7; white-space:pre-wrap; background:var(--light); border:1.5px solid var(--border); border-radius:10px; padding:16px; min-height:120px; }
+  .modal-no-log { text-align:center; padding:40px 20px; color:#a8c4b0; font-style:italic; font-size:14px; }
+  .modal-footer { padding:0 24px 20px; display:flex; gap:10px; justify-content:flex-end; }
+  .btn-edit-log { background:var(--gold); color:var(--dark); border:none; border-radius:8px; padding:9px 18px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-delete-log { background:none; border:1.5px solid #ffb3b8; border-radius:8px; padding:9px 14px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; color:var(--red); cursor:pointer; }
+
+  /* TOAST */
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--dark); color:white; padding:10px 22px; border-radius:10px; font-size:13px; font-weight:600; z-index:8000; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
+  .toast.show { opacity:1; }
+
+  .btn-print-report {
+    background: var(--dark);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 32px;
+    font-family: 'DM Sans', sans-serif;
+    font-size:14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .18s, transform .12s;
+    letter-spacing: .5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  }
+  .btn-print-report:hover { background: var(--green); transform: translateY(-2px); }
+
+  .btn-download-report {
+    background: #C4A882;
+    color: #2a1a0a;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 32px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .18s, transform .12s;
+    letter-spacing: .5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  }
+  .btn-download-report:hover { background: #d4b892; transform: translateY(-2px); }
+
+  /* PRINT STYLES */
+  @media print {
+    .preview-banner, .app-header, .voice-section, .calendar-nav, .calendar-wrap, .modal-overlay, .toast { display:none !important; }
+    .print-report { display:block !important; }
+    body { background:white; }
+  }
+
+  .print-report {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: white;
+    z-index: 2000;
+    overflow-y: auto;
+    padding: 40px;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .print-report.open { display:block; }
+
+  .report-header {
+    border-bottom: 3px solid #333;
+    padding-bottom: 16px;
+    margin-bottom: 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .report-title { font-family:'Bebas Neue',sans-serif; font-size:42px; letter-spacing:3px; color:#1a1a1a; line-height:1; }
+  .report-subtitle { font-size:14px; color:#666; margin-top:4px; }
+  .report-meta { text-align:right; font-size:12px; color:#888; }
+
+  .report-entry {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    page-break-inside: avoid;
+  }
+  .report-entry:last-child { border-bottom: none; }
+
+  .report-entry-date {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 1.5px;
+    color: #2a2a2a;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .report-entry-date::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #ddd;
+  }
+
+  .report-entry-text {
+    font-size: 13px;
+    color: #333;
+    line-height: 1.75;
+    padding-left: 14px;
+    border-left: 3px solid #C4A882;
+  }
+
+  .report-no-entries {
+    text-align: center;
+    padding: 60px 20px;
+    color: #aaa;
+    font-size: 16px;
+    font-style: italic;
+  }
+
+  .report-summary {
+    background: #f5f0e8;
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin-bottom: 28px;
+    display: flex;
+    gap: 32px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .summary-stat strong { font-size:24px; font-family:'Bebas Neue',sans-serif; color:#4A3728; display:block; }
+  .summary-stat span { font-size:11px; color:#888; text-transform:uppercase; letter-spacing:.5px; }
+
+  .report-actions {
+    position: sticky;
+    top: 0;
+    background: white;
+    padding: 12px 0 16px;
+    display: flex;
+    gap: 10px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 28px;
+    z-index: 10;
+  }
+
+  .btn-do-print { background:#4A3728; color:white; border:none; border-radius:8px; padding:9px 20px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-do-print:hover { background:#333; }
+  .btn-close-report { background:none; border:2px solid #ddd; border-radius:8px; padding:9px 16px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; color:#666; cursor:pointer; }
+  .btn-close-report:hover { border-color:#e63946; color:#e63946; }
+
+  .btn-export {
+    background: rgba(255,255,255,.12);
+    color: white;
+    border: 1.5px solid rgba(255,255,255,.25);
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .18s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-export:hover { background: rgba(255,255,255,.22); }
+
+  .btn-import {
+    background: var(--gold);
+    color: var(--dark);
+    border: none;
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .18s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-import:hover { background: #f0d060; }
+
+  /* IMPORT CONFIRM MODAL */
+  .import-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:700; justify-content:center; align-items:center; padding:20px; }
+  .import-overlay.open { display:flex; }
+  .import-box { background:white; border-radius:16px; padding:32px; max-width:420px; width:100%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.3); animation:modalIn .22s ease; }
+  .import-box .icon { font-size:44px; display:block; margin-bottom:12px; }
+  .import-box h3 { font-family:'Bebas Neue',sans-serif; font-size:26px; letter-spacing:2px; color:#2a1a0a; }
+  .import-box p { font-size:13px; color:#666; margin-top:8px; margin-bottom:8px; line-height:1.6; }
+  .import-box .warning { font-size:12px; color:#e63946; font-weight:600; background:#ffeaeb; border-radius:8px; padding:8px 12px; margin-bottom:20px; }
+  .import-btns { display:flex; gap:10px; justify-content:center; }
+  .btn-confirm-import { background:#4A3728; color:white; border:none; border-radius:8px; padding:10px 22px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-confirm-import:hover { background:#2a1a0a; }
+  .btn-cancel-import { background:none; border:2px solid #ddd; border-radius:8px; padding:10px 18px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; color:#666; cursor:pointer; }
+  .btn-cancel-import:hover { border-color:#e63946; color:#e63946; }
+
+  /* LANDING PAGE */
+  .landing-page { position:fixed; inset:0; background:#4A3728; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:9000; padding:24px; background-image:radial-gradient(circle at 80% 20%, rgba(196,168,130,0.15) 0%, transparent 50%), radial-gradient(circle at 20% 80%, rgba(0,0,0,0.2) 0%, transparent 50%); }
+  .landing-page.hidden { display:none; }
+  .landing-card { background:white; border-radius:24px; padding:48px 40px; width:100%; max-width:420px; text-align:center; box-shadow:0 24px 80px rgba(0,0,0,0.3); animation:modalIn .4s ease; }
+  .landing-card h1 { font-family:'Bebas Neue',sans-serif; font-size:36px; letter-spacing:3px; color:#2a1a0a; line-height:1.2; margin-bottom:6px; }
+  .landing-card h1 span { color:#8B6914; }
+  .landing-sub { font-size:13px; color:#9B8B7A; margin-bottom:28px; }
+  .pw-wrap { position:relative; margin-bottom:10px; }
+  .pw-input { width:100%; padding:13px 44px 13px 16px; border:2px solid #E8D8BC; border-radius:10px; font-family:'DM Sans',sans-serif; font-size:16px; color:#2a1a0a; background:#FBF7F0; outline:none; transition:border-color .2s; text-align:center; letter-spacing:6px; }
+  .pw-input:focus { border-color:#8B6914; background:white; }
+  .pw-input.shake { animation:shake .4s ease; }
+  .pw-toggle { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:#9B8B7A; cursor:pointer; font-size:18px; }
+  .pw-error { font-size:12px; color:#e63946; font-weight:600; min-height:18px; margin-bottom:10px; display:block; }
+  .btn-enter { width:100%; background:#4A3728; color:white; border:none; border-radius:10px; padding:13px; font-family:'DM Sans',sans-serif; font-size:15px; font-weight:700; cursor:pointer; transition:background .18s; }
+  .btn-enter:hover { background:#2a1a0a; }
+  .landing-footer { margin-top:20px; font-size:11px; color:rgba(255,255,255,0.35); }
+
+  .preview-banner { background:var(--gold); color:var(--dark); text-align:center; padding:8px; font-size:12px; font-weight:700; }
+
+  @media (max-width:700px) {
+    .app-header { padding:20px; }
+    .app-header h1 { font-size:32px; }
+    .calendar-nav { padding:12px 16px; }
+    .calendar-wrap { padding:16px; }
+    .cal-day { min-height:60px; padding:5px; }
+    .log-preview { display:none; }
+    .voice-section { padding:16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LANDING PAGE -->
+<div class="landing-page" id="landingPage">
+  <div class="landing-card">
+    <h1>VINEYARD <span>WORK LOG</span></h1>
+    <p class="landing-sub">Enter your password to continue</p>
+    <div class="pw-wrap">
+      <input class="pw-input" type="password" id="pwInput" placeholder="••••" maxlength="10">
+      <button class="pw-toggle" onclick="togglePw()" id="pwToggle">👁</button>
+    </div>
+    <span class="pw-error" id="pwError"></span>
+    <button class="btn-enter" onclick="checkPassword()">Enter →</button>
+  </div>
+  <div class="landing-footer">Good Grape Vineyard · Private Access Only</div>
+</div>
+
+<!-- HEADER -->
+<div class="app-header">
+  <div>
+    <h1>VINEYARD <span>WORK LOG</span></h1>
+    <p>Click any day to view or add a work log entry</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <button class="btn-export" onclick="exportData()">⬇️ Export Backup</button>
+    <label class="btn-import" for="importFile">⬆️ Import Backup</label>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+</div>
+
+<!-- VOICE LOG SECTION -->
+<div class="voice-section">
+  <div class="voice-card" style="max-width:260px;text-align:center;">
+    <div class="voice-card-title">🎙 VOICE LOG</div>
+    <button class="mic-btn" id="micBtn" onclick="toggleRecording()">🎤</button>
+    <div class="mic-status" id="micStatus">Tap mic to start recording</div>
+    <div class="selected-date-display" id="selectedDateDisplay">SELECT A DAY</div>
+    <div class="selected-date-hint">Click a calendar day first, then record</div>
+  </div>
+
+  <div class="voice-card" style="flex:1;">
+    <div class="voice-card-title">📝 TRANSCRIPTION</div>
+    <textarea class="transcript-box" id="transcriptBox" placeholder="Your spoken words will appear here automatically... or type directly if you prefer."></textarea>
+    <div class="voice-actions">
+      <button class="btn-clear" onclick="clearTranscript()">Clear</button>
+      <button class="btn-save-log" onclick="saveLog()">💾 Save to Calendar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDAR NAV -->
+<div class="calendar-nav">
+  <button class="nav-btn" onclick="changeMonth(-1)">← Prev</button>
+  <div class="month-title" id="monthTitle"></div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn-today" onclick="goToday()">Today</button>
+    <button class="nav-btn" onclick="changeMonth(1)">Next →</button>
+  </div>
+</div>
+
+<!-- CALENDAR -->
+<div class="calendar-wrap">
+  <div class="day-headers">
+    <div class="day-header">Sun</div>
+    <div class="day-header">Mon</div>
+    <div class="day-header">Tue</div>
+    <div class="day-header">Wed</div>
+    <div class="day-header">Thu</div>
+    <div class="day-header">Fri</div>
+    <div class="day-header">Sat</div>
+  </div>
+  <div class="calendar-grid" id="calendarGrid"></div>
+  <div style="display:flex;justify-content:center;margin-top:28px;">
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button class="btn-print-report" onclick="printMonthReport()">🖨️ Print Month Report</button>
+      <button class="btn-download-report" onclick="downloadMonthReport()">⬇️ Download Month Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOG MODAL -->
+<div class="modal-overlay" id="logModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2>WORK <span>LOG</span></h2>
+        <div class="modal-date" id="modalDate"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter"></div>
+  </div>
+</div>
+
+<!-- PRINT REPORT -->
+<div class="print-report" id="printReport">
+  <div class="report-actions">
+    <button class="btn-do-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    <button class="btn-close-report" onclick="closeReport()">✕ Close Report</button>
+  </div>
+  <div class="report-header">
+    <div>
+      <div class="report-title" id="reportTitle">VINEYARD WORK LOG</div>
+      <div class="report-subtitle" id="reportSubtitle"></div>
+    </div>
+    <div class="report-meta" id="reportMeta"></div>
+  </div>
+  <div class="report-summary" id="reportSummary"></div>
+  <div id="reportEntries"></div>
+</div>
+
+<!-- IMPORT CONFIRM MODAL -->
+<div class="import-overlay" id="importOverlay">
+  <div class="import-box">
+    <span class="icon">⬆️</span>
+    <h3>Import Backup?</h3>
+    <p>This will load all work log entries from your backup file.</p>
+    <div class="warning">⚠️ This will replace all current data in this session</div>
+    <div id="importPreview" style="font-size:12px;color:#888;margin-bottom:16px;"></div>
+    <div class="import-btns">
+      <button class="btn-cancel-import" onclick="cancelImport()">Cancel</button>
+      <button class="btn-confirm-import" onclick="confirmImport()">Yes, Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  // ── STATE ──
+  let currentDate = new Date();
+  let selectedDate = null;
+  let logs = {
+    // Sample data
+    [dateKey(new Date())]: "Checked all vine rows for pest damage. Found some mildew on the east block — applied sulfur spray to affected area. Irrigation running well. Temperature hit 94°F, opened shade cloth on the south facing rows.",
+    [dateKey(new Date(new Date().setDate(new Date().getDate()-2)))]: "Pruned back the Fry muscadine vines on row 12 through 18. Removed dead canes and tied new growth to trellis wires. Noticed good bud development on the Supreme block.",
+    [dateKey(new Date(new Date().setDate(new Date().getDate()-5)))]: "Harvested first pick of Supreme muscadines from the north block. Approximately 200 lbs total. Packed into clamshells and moved to cold storage. Quality looks excellent this year.",
+    [dateKey(new Date(new Date().setDate(new Date().getDate()-8)))]: "Soil moisture test across all blocks. Applied potassium fertilizer to the Carlos block — levels were low. Repaired two broken trellis posts on row 7. Mowed between rows.",
+    [dateKey(new Date(new Date().setDate(new Date().getDate()-1)))]: "Walked all rows after last night's rain. Looking for standing water and vine damage. Everything looks good. Checked bird netting — one section loose on the west end, secured it back.",
+  };
+
+  let recording = false;
+  let recognition = null;
+  let viewingDate = null;
+
+  function dateKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function formatDisplay(key) {
+    const p = key.split('-');
+    return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 2500);
+  }
+
+  // ── CALENDAR ──
+  function renderCalendar() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const today = new Date();
+    const todayKey = dateKey(today);
+
+    document.getElementById('monthTitle').textContent =
+      currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase();
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const daysInPrev = new Date(year, month, 0).getDate();
+
+    const grid = document.getElementById('calendarGrid');
+    grid.innerHTML = '';
+
+    let cells = [];
+
+    // Blank spacers for days before 1st
+    for (let i = 0; i < firstDay; i++) {
+      cells.push({blank: true});
+    }
+    // Current month only
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({day: d, month, year, blank: false});
+    }
+
+    cells.forEach((c, i) => {
+      const div = document.createElement('div');
+
+      if (c.blank) {
+        div.className = 'cal-day-blank';
+        grid.appendChild(div);
+        return;
+      }
+
+      const key = `${c.year}-${String(c.month+1).padStart(2,'0')}-${String(c.day).padStart(2,'0')}`;
+      const isToday = key === todayKey;
+      const hasLog = !!logs[key];
+      const isSelected = selectedDate === key;
+
+      div.className = `cal-day${isToday?' today':''}${hasLog?' has-log':''}${isSelected?' selected':''}`;
+      div.style.animationDelay = `${i*0.01}s`;
+
+      div.innerHTML = `<div class="day-num">${c.day}${isToday?'<span class="today-dot"></span>':''}</div>${hasLog?`<div class="log-preview">${logs[key]}</div>`:''}`;
+      div.onclick = () => clickDay(key);
+
+      grid.appendChild(div);
+    });
+  }
+
+  function clickDay(key) {
+    selectedDate = key;
+    document.getElementById('selectedDateDisplay').textContent = formatDisplay(key).toUpperCase().split(',')[0] + ', ' + key.split('-')[2];
+
+    if (logs[key]) {
+      openModal(key);
+    } else {
+      showToast('📅 Day selected — record or type your log above');
+    }
+    renderCalendar();
+  }
+
+  function changeMonth(dir) {
+    currentDate.setMonth(currentDate.getMonth() + dir);
+    renderCalendar();
+  }
+
+  function goToday() {
+    currentDate = new Date();
+    selectedDate = dateKey(currentDate);
+    document.getElementById('selectedDateDisplay').textContent = 'TODAY';
+    renderCalendar();
+    showToast('📅 Showing today');
+  }
+
+  // ── VOICE ──
+  function toggleRecording() {
+    if (!selectedDate) {
+      showToast('⚠️ Please select a day on the calendar first');
+      return;
+    }
+
+    if (!recording) {
+      startRecording();
+    } else {
+      stopRecording();
+    }
+  }
+
+  function startRecording() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      showToast('⚠️ Voice not supported in this browser — please use Chrome');
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    let finalTranscript = document.getElementById('transcriptBox').value;
+
+    recognition.onresult = function(e) {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          finalTranscript += e.results[i][0].transcript + ' ';
+        } else {
+          interim += e.results[i][0].transcript;
+        }
+      }
+      document.getElementById('transcriptBox').value = finalTranscript + interim;
+    };
+
+    recognition.onerror = function(e) {
+      showToast('⚠️ Microphone error — check browser permissions');
+      stopRecording();
+    };
+
+    recognition.onend = function() {
+      if (recording) recognition.start();
+    };
+
+    recognition.start();
+    recording = true;
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('micBtn').textContent = '⏹';
+    document.getElementById('micStatus').textContent = '🔴 Recording... tap to stop';
+    document.getElementById('micStatus').classList.add('active');
+  }
+
+  function stopRecording() {
+    if (recognition) { recognition.stop(); recognition = null; }
+    recording = false;
+    document.getElementById('micBtn').classList.remove('recording');
+    document.getElementById('micBtn').textContent = '🎤';
+    document.getElementById('micStatus').textContent = 'Tap mic to start recording';
+    document.getElementById('micStatus').classList.remove('active');
+  }
+
+  function clearTranscript() {
+    stopRecording();
+    document.getElementById('transcriptBox').value = '';
+  }
+
+  function saveLog() {
+    if (!selectedDate) { showToast('⚠️ Please select a day on the calendar first'); return; }
+    const text = document.getElementById('transcriptBox').value.trim();
+    if (!text) { showToast('⚠️ Nothing to save — record or type a log first'); return; }
+    logs[selectedDate] = text;
+    document.getElementById('transcriptBox').value = '';
+    stopRecording();
+    renderCalendar();
+    showToast('✅ Log saved for ' + formatDisplay(selectedDate).split(',')[0]);
+  }
+
+  // ── MODAL ──
+  function openModal(key) {
+    viewingDate = key;
+    document.getElementById('modalDate').textContent = formatDisplay(key);
+    const body = document.getElementById('modalBody');
+    const footer = document.getElementById('modalFooter');
+
+    if (logs[key]) {
+      body.innerHTML = `<div class="modal-log-text">${logs[key]}</div>`;
+      footer.innerHTML = `
+        <button class="btn-delete-log" onclick="deleteLog('${key}')">🗑 Delete</button>
+        <button class="btn-edit-log" onclick="editLog('${key}')">✏️ Edit</button>`;
+    } else {
+      body.innerHTML = `<div class="modal-no-log">No log entry for this day yet.<br>Select this day and use the voice recorder above.</div>`;
+      footer.innerHTML = '';
+    }
+
+    document.getElementById('logModal').classList.add('open');
+  }
+
+  function closeModal() { document.getElementById('logModal').classList.remove('open'); }
+
+  function deleteLog(key) {
+    delete logs[key];
+    closeModal();
+    renderCalendar();
+    showToast('🗑 Log entry deleted');
+  }
+
+  function editLog(key) {
+    closeModal();
+    selectedDate = key;
+    document.getElementById('transcriptBox').value = logs[key] || '';
+    document.getElementById('selectedDateDisplay').textContent = formatDisplay(key).split(',')[0].toUpperCase();
+    renderCalendar();
+    document.getElementById('transcriptBox').focus();
+    window.scrollTo({top:0,behavior:'smooth'});
+    showToast('✏️ Edit your log above and click Save');
+  }
+
+  document.getElementById('logModal').addEventListener('click', function(e) { if(e.target===this) closeModal(); });
+  document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+
+  // ── PRINT REPORT ──
+  function printMonthReport() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthName = currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+
+    // Collect all logged days for this month
+    const entries = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if (logs[key]) {
+        entries.push({ key, day: d, text: logs[key] });
+      }
+    }
+
+    // Set report header
+    document.getElementById('reportTitle').textContent = 'VINEYARD WORK LOG — ' + monthName.toUpperCase();
+    document.getElementById('reportSubtitle').textContent = 'Monthly Work Log Report';
+    document.getElementById('reportMeta').innerHTML = `Generated: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}<br>Total days logged: ${entries.length} of ${daysInMonth}`;
+
+    // Summary
+    document.getElementById('reportSummary').innerHTML = `
+      <div class="summary-stat"><strong>${daysInMonth}</strong><span>Days in Month</span></div>
+      <div class="summary-stat"><strong>${entries.length}</strong><span>Days Logged</span></div>
+      <div class="summary-stat"><strong>${daysInMonth - entries.length}</strong><span>Days Not Logged</span></div>
+    `;
+
+    // Entries
+    const entriesDiv = document.getElementById('reportEntries');
+    if (!entries.length) {
+      entriesDiv.innerHTML = '<div class="report-no-entries">No work log entries found for ' + monthName + '.</div>';
+    } else {
+      entriesDiv.innerHTML = entries.map(e => `
+        <div class="report-entry">
+          <div class="report-entry-date">${formatDisplay(e.key)}</div>
+          <div class="report-entry-text">${e.text}</div>
+        </div>`).join('');
+    }
+
+    document.getElementById('printReport').classList.add('open');
+    window.scrollTo(0,0);
+  }
+
+  function closeReport() {
+    document.getElementById('printReport').classList.remove('open');
+  }
+
+  function downloadMonthReport() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthName = currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+
+    // Collect entries
+    const entries = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if (logs[key]) {
+        const date = new Date(year, month, d).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+        entries.push({ date, text: logs[key] });
+      }
+    }
+
+    // Build a clean printable HTML page
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Vineyard Work Log — ${monthName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'DM Sans',sans-serif; background:white; color:#1a1a1a; padding:48px 52px; max-width:860px; margin:0 auto; }
+  .report-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:#C4A882; margin-bottom:4px; }
+  .report-title { font-family:'Bebas Neue',sans-serif; font-size:46px; letter-spacing:3px; color:#1a1a1a; line-height:1; }
+  .report-month { font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:2px; color:#4A3728; margin-top:4px; }
+  .report-header { border-bottom:3px solid #2a1a0a; padding-bottom:20px; margin-bottom:28px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; }
+  .report-meta { text-align:right; font-size:12px; color:#888; line-height:1.8; }
+  .report-meta strong { color:#4A3728; }
+  .summary { background:#FBF7F0; border:1.5px solid #E8D8BC; border-radius:10px; padding:16px 24px; margin-bottom:28px; display:flex; gap:0; }
+  .s-stat { flex:1; text-align:center; border-right:1px solid #E8D8BC; padding:0 16px; }
+  .s-stat:last-child { border-right:none; }
+  .s-stat strong { font-family:'Bebas Neue',sans-serif; font-size:32px; color:#4A3728; display:block; }
+  .s-stat span { font-size:11px; color:#9B8B7A; text-transform:uppercase; letter-spacing:.5px; }
+  .entries-title { font-family:'Bebas Neue',sans-serif; font-size:15px; letter-spacing:2px; color:#9B8B7A; margin-bottom:20px; padding-bottom:8px; border-bottom:1px solid #e8d8bc; }
+  .entry { margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid #ede4d4; page-break-inside:avoid; }
+  .entry:last-child { border-bottom:none; }
+  .entry-date { font-family:'Bebas Neue',sans-serif; font-size:17px; letter-spacing:1px; color:#2a1a0a; margin-bottom:8px; display:flex; align-items:center; gap:10px; }
+  .entry-date::after { content:''; flex:1; height:1px; background:#ddd; }
+  .entry-text { font-size:13.5px; color:#333; line-height:1.8; padding:12px 16px; background:#faf7f2; border-left:3px solid #C4A882; border-radius:0 8px 8px 0; }
+  .no-entries { text-align:center; padding:60px; color:#aaa; font-style:italic; }
+  .footer { margin-top:40px; padding-top:16px; border-top:1px solid #ede4d4; display:flex; justify-content:space-between; font-size:11px; color:#bbb; }
+  @media print { body { padding:32px 40px; } }
+</style>
+</head>
+<body>
+  <div class="report-header">
+    <div>
+      <div class="report-label">Monthly Work Log Report</div>
+      <div class="report-title">VINEYARD WORK LOG</div>
+      <div class="report-month">${monthName.toUpperCase()}</div>
+    </div>
+    <div class="report-meta">
+      Generated: <strong>${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</strong><br>
+      Days Logged: <strong>${entries.length} of ${daysInMonth}</strong>
+    </div>
+  </div>
+  <div class="summary">
+    <div class="s-stat"><strong>${daysInMonth}</strong><span>Days in Month</span></div>
+    <div class="s-stat"><strong>${entries.length}</strong><span>Days Logged</span></div>
+    <div class="s-stat"><strong>${daysInMonth - entries.length}</strong><span>Not Logged</span></div>
+  </div>
+  <div class="entries-title">DAILY LOG ENTRIES</div>
+  ${entries.length ? entries.map(e => `
+    <div class="entry">
+      <div class="entry-date">${e.date}</div>
+      <div class="entry-text">${e.text}</div>
+    </div>`).join('') : '<div class="no-entries">No log entries for this month.</div>'}
+  <div class="footer">
+    <span>Vineyard Work Log</span>
+    <span>${monthName} · Page 1 of 1</span>
+  </div>
+</body>
+</html>`;
+
+    // Open in new tab so user can Save as PDF via browser print
+    const blob = new Blob([html], {type: 'text/html'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vineyard-worklog-${monthName.replace(' ','-')}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('⬇️ Report downloaded — open file and print to save as PDF');
+  }
+
+  // ── EXPORT ──
+  function exportData() {
+    const exportObj = {
+      exportDate: new Date().toISOString(),
+      appName: 'Vineyard Work Log',
+      totalEntries: Object.keys(logs).length,
+      logs: logs
+    };
+    const json = JSON.stringify(exportObj, null, 2);
+    const blob = new Blob([json], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const month = currentDate.toLocaleDateString('en-US',{month:'long',year:'numeric'}).replace(' ','-');
+    a.download = `vineyard-worklog-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ Backup downloaded successfully');
+  }
+
+  // ── IMPORT ──
+  let pendingImportData = null;
+
+  function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        // Support both raw logs object and wrapped export format
+        if (parsed.logs) {
+          pendingImportData = parsed.logs;
+          const count = Object.keys(parsed.logs).length;
+          document.getElementById('importPreview').textContent = `Found ${count} log entries from backup dated ${parsed.exportDate ? new Date(parsed.exportDate).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : 'unknown date'}`;
+        } else if (typeof parsed === 'object') {
+          pendingImportData = parsed;
+          const count = Object.keys(parsed).length;
+          document.getElementById('importPreview').textContent = `Found ${count} log entries in file`;
+        } else {
+          showToast('⚠️ Invalid backup file format');
+          return;
+        }
+        document.getElementById('importOverlay').classList.add('open');
+      } catch(err) {
+        showToast('⚠️ Could not read file — make sure it is a valid JSON backup');
+      }
+      // Reset file input so same file can be re-imported if needed
+      event.target.value = '';
+    };
+    reader.readAsText(file);
+  }
+
+  function cancelImport() {
+    pendingImportData = null;
+    document.getElementById('importOverlay').classList.remove('open');
+  }
+
+  function confirmImport() {
+    if (!pendingImportData) return;
+    logs = pendingImportData;
+    pendingImportData = null;
+    document.getElementById('importOverlay').classList.remove('open');
+    renderCalendar();
+    showToast('✅ Backup imported successfully — ' + Object.keys(logs).length + ' entries loaded');
+  }
+
+  document.getElementById('importOverlay').addEventListener('click', function(e) {
+    if (e.target === this) cancelImport();
+  });
+
+  // ── PASSWORD ──
+  function checkPassword() {
+    const val = document.getElementById('pwInput').value;
+    if (val === '2590') {
+      document.getElementById('landingPage').classList.add('hidden');
+      sessionStorage.setItem('vwl_auth','1');
+    } else {
+      const inp = document.getElementById('pwInput');
+      document.getElementById('pwError').textContent = 'Incorrect password. Please try again.';
+      inp.classList.remove('shake');
+      void inp.offsetWidth;
+      inp.classList.add('shake');
+      inp.value = '';
+    }
+  }
+
+  function togglePw() {
+    const inp = document.getElementById('pwInput');
+    const btn = document.getElementById('pwToggle');
+    if (inp.type === 'password') { inp.type='text'; btn.textContent='🙈'; }
+    else { inp.type='password'; btn.textContent='👁'; }
+  }
+
+  document.getElementById('pwInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') checkPassword();
+  });
+
+  if (sessionStorage.getItem('vwl_auth') === '1') {
+    document.getElementById('landingPage').classList.add('hidden');
+  }
+
+  // ── FIREBASE ──
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBK6Q577OkMYWVVC-CQ69hvtnRuQngyvXQ",
+    authDomain: "vineyard-worklog.firebaseapp.com",
+    projectId: "vineyard-worklog",
+    storageBucket: "vineyard-worklog.firebasestorage.app",
+    messagingSenderId: "684938789180",
+    appId: "1:684938789180:web:b25dbc234c7ee315671e39"
+  };
+
+  const fbApp = initializeApp(firebaseConfig);
+  const db = getFirestore(fbApp);
+  const LOG_DOC = doc(db, 'worklog', 'main');
+
+  async function loadLogs() {
+    try {
+      const snap = await getDoc(LOG_DOC);
+      if (snap.exists() && snap.data().logs) {
+        logs = snap.data().logs;
+      }
+    } catch(e) {
+      console.error('Firebase load error:', e);
+      showToast('⚠️ Could not load data from database');
+    }
+  }
+
+  async function saveLogs() {
+    try {
+      await setDoc(LOG_DOC, { logs, updatedAt: new Date().toISOString() });
+    } catch(e) {
+      console.error('Firebase save error:', e);
+      showToast('⚠️ Could not save to database');
+    }
+  }
+
+  // Wrap saveLog to also save to Firebase
+  const _origSaveLog = saveLog;
+  saveLog = async function() {
+    if (!selectedDate) { showToast('⚠️ Please select a day on the calendar first'); return; }
+    const text = document.getElementById('transcriptBox').value.trim();
+    if (!text) { showToast('⚠️ Nothing to save — record or type a log first'); return; }
+    logs[selectedDate] = text;
+    document.getElementById('transcriptBox').value = '';
+    stopRecording();
+    await saveLogs();
+    renderCalendar();
+    showToast('✅ Log saved for ' + formatDisplay(selectedDate).split(',')[0]);
+  };
+
+  // Wrap deleteLog to also save to Firebase
+  const _origDeleteLog = deleteLog;
+  deleteLog = async function(key) {
+    delete logs[key];
+    await saveLogs();
+    closeModal();
+    renderCalendar();
+    showToast('🗑 Log entry deleted');
+  };
+
+  // Wrap confirmImport to also save to Firebase
+  const _origConfirmImport = confirmImport;
+  confirmImport = async function() {
+    if (!pendingImportData) return;
+    logs = pendingImportData;
+    pendingImportData = null;
+    document.getElementById('importOverlay').classList.remove('open');
+    await saveLogs();
+    renderCalendar();
+    showToast('✅ Backup imported — ' + Object.keys(logs).length + ' entries loaded');
+  };
+
+  // ── INIT ──
+  selectedDate = dateKey(new Date());
+  document.getElementById('selectedDateDisplay').textContent = 'TODAY';
+
+  loadLogs().then(() => {
+    renderCalendar();
+  });
+</script>
+</body>
+</html>
