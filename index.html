@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vineyard Work Log</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vineyard Log">
+<meta name="theme-color" content="#4A3728">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
   :root {
     --green: #C4A882;
@@ -391,6 +396,14 @@
   .btn-cancel-import { background:none; border:2px solid #ddd; border-radius:8px; padding:10px 18px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; color:#666; cursor:pointer; }
   .btn-cancel-import:hover { border-color:#e63946; color:#e63946; }
 
+  /* LOADING SCREEN */
+  .loading-screen { position:fixed; inset:0; background:#4A3728; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:9500; gap:16px; transition:opacity .4s; }
+  .loading-screen.hidden { opacity:0; pointer-events:none; }
+  .loading-screen h2 { font-family:'Bebas Neue',sans-serif; font-size:32px; letter-spacing:3px; color:white; }
+  .loading-screen p { color:rgba(255,255,255,.5); font-size:13px; }
+  .spinner { width:44px; height:44px; border:4px solid rgba(255,255,255,.2); border-top-color:#C4A882; border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
   /* LANDING PAGE */
   .landing-page { position:fixed; inset:0; background:#4A3728; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:9000; padding:24px; background-image:radial-gradient(circle at 80% 20%, rgba(196,168,130,0.15) 0%, transparent 50%), radial-gradient(circle at 20% 80%, rgba(0,0,0,0.2) 0%, transparent 50%); }
   .landing-page.hidden { display:none; }
@@ -410,18 +423,78 @@
 
   .preview-banner { background:var(--gold); color:var(--dark); text-align:center; padding:8px; font-size:12px; font-weight:700; }
 
-  @media (max-width:700px) {
-    .app-header { padding:20px; }
-    .app-header h1 { font-size:32px; }
-    .calendar-nav { padding:12px 16px; }
-    .calendar-wrap { padding:16px; }
-    .cal-day { min-height:60px; padding:5px; }
+  @media (max-width:768px) {
+    /* HEADER */
+    .app-header { padding:16px; flex-direction:column; align-items:flex-start; gap:12px; }
+    .app-header h1 { font-size:28px; }
+    .app-header p { font-size:12px; }
+    .app-header > div:last-child { width:100%; display:flex; gap:8px; }
+    .btn-export, .btn-import { flex:1; justify-content:center; font-size:12px; padding:8px 10px; }
+
+    /* VOICE SECTION */
+    .voice-section { padding:14px; flex-direction:column; gap:12px; }
+    .voice-card { min-width:unset; max-width:unset !important; width:100%; }
+    .mic-btn { width:64px; height:64px; font-size:26px; }
+    .selected-date-display { font-size:18px; }
+    .transcript-box { min-height:80px; font-size:14px; }
+    .voice-actions { flex-direction:row; }
+    .btn-save-log { flex:1; font-size:14px; padding:11px; }
+    .btn-clear { font-size:14px; padding:11px 14px; }
+
+    /* CALENDAR NAV */
+    .calendar-nav { padding:10px 14px; }
+    .month-title { font-size:20px; }
+    .nav-btn { padding:6px 12px; font-size:12px; }
+    .btn-today { padding:6px 12px; font-size:12px; }
+
+    /* CALENDAR GRID */
+    .calendar-wrap { padding:10px 10px 20px; }
+    .day-header { font-size:10px; padding:4px 0; }
+    .cal-day { min-height:52px; padding:5px 4px; border-radius:7px; }
+    .day-num { font-size:12px; }
     .log-preview { display:none; }
-    .voice-section { padding:16px; }
+    .log-indicator { width:6px; height:6px; }
+    .today-dot { width:5px; height:5px; }
+
+    /* PRINT BUTTON */
+    .btn-print-report, .btn-download-report { font-size:13px; padding:11px 20px; }
+
+    /* MODAL */
+    .modal { border-radius:14px; margin:10px; }
+    .modal-header { padding:14px 18px; }
+    .modal-header h2 { font-size:20px; }
+    .modal-body { padding:16px 18px; }
+    .modal-log-text { font-size:13px; padding:12px; }
+    .modal-footer { padding:0 18px 18px; }
+
+    /* PRINT REPORT */
+    .print-report { padding:16px; }
+    .report-content { padding:20px 16px; }
+    .report-title { font-size:32px; }
+    .report-month { font-size:20px; }
+    .report-actions { flex-direction:column; }
+    .btn-do-print, .btn-close-report { width:100%; text-align:center; justify-content:center; }
+    .summary-stat strong { font-size:28px; }
+
+    /* IMPORT MODAL */
+    .import-box { padding:24px 20px; }
+    .import-btns { flex-direction:column; }
+    .btn-confirm-import, .btn-cancel-import { width:100%; }
+
+    /* LANDING */
+    .landing-card { padding:36px 24px; }
+    .landing-card h1 { font-size:28px; }
   }
 </style>
 </head>
 <body>
+
+<!-- LOADING SCREEN -->
+<div class="loading-screen" id="loadingScreen">
+  <div class="spinner"></div>
+  <h2>VINEYARD WORK LOG</h2>
+  <p>Loading your data...</p>
+</div>
 
 <!-- LANDING PAGE -->
 <div class="landing-page" id="landingPage">
@@ -849,6 +922,11 @@
 <meta charset="UTF-8">
 <title>Vineyard Work Log — ${monthName}</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vineyard Log">
+<meta name="theme-color" content="#4A3728">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:'DM Sans',sans-serif; background:white; color:#1a1a1a; padding:48px 52px; max-width:860px; margin:0 auto; }
@@ -1043,6 +1121,9 @@
     } catch(e) {
       console.error('Firebase load error:', e);
       showToast('⚠️ Could not load data from database');
+    } finally {
+      document.getElementById('loadingScreen').classList.add('hidden');
+      setTimeout(() => { document.getElementById('loadingScreen').style.display='none'; }, 500);
     }
   }
 
