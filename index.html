@@ -1000,6 +1000,7 @@ function checkPassword() {
   if (val === '2590') {
     document.getElementById('landingPage').classList.add('hidden');
     sessionStorage.setItem('vwl_auth','1');
+    startApp();
   } else {
     const inp = document.getElementById('pwInput');
     document.getElementById('pwError').textContent = 'Incorrect password. Please try again.';
@@ -1020,31 +1021,38 @@ document.getElementById('pwInput').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') checkPassword();
 });
 
-if (sessionStorage.getItem('vwl_auth') === '1') {
-  document.getElementById('landingPage').classList.add('hidden');
-}
+// session check handled in init
 
 // ── INIT ──
 selectedDate = dateKey(new Date());
 document.getElementById('selectedDateDisplay').textContent = 'TODAY';
 
-// Load from localStorage instantly first so app feels fast
-try {
-  const cached = localStorage.getItem('vwl_logs_cache');
-  if (cached) {
-    logs = JSON.parse(cached);
-    hideLoading();
-    renderCalendar();
-    showToast('📡 Syncing with database...');
-  }
-} catch(e) {}
+// Hide loading screen immediately — show password page first
+hideLoading();
 
-// Then sync with Firebase in background
-loadLogs().then(() => {
-  // Cache to localStorage for next time
-  try { localStorage.setItem('vwl_logs_cache', JSON.stringify(logs)); } catch(e) {}
-  renderCalendar();
-});
+// Only load Firebase AFTER user is authenticated
+function startApp() {
+  // Load from localStorage instantly
+  try {
+    const cached = localStorage.getItem('vwl_logs_cache');
+    if (cached) {
+      logs = JSON.parse(cached);
+      renderCalendar();
+    }
+  } catch(e) {}
+
+  // Sync Firebase silently in background
+  loadLogs().then(() => {
+    try { localStorage.setItem('vwl_logs_cache', JSON.stringify(logs)); } catch(e) {}
+    renderCalendar();
+  });
+}
+
+// If already logged in from session start app immediately
+if (sessionStorage.getItem('vwl_auth') === '1') {
+  document.getElementById('landingPage').classList.add('hidden');
+  startApp();
+}
 
 </script>
 </body>
