@@ -4,7 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vineyard Work Log</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="dns-prefetch" href="https://www.gstatic.com">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');
+</style>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Vineyard Log">
@@ -686,11 +691,14 @@ async function loadLogs() {
 }
 
 async function saveLogs() {
+  // Save to localStorage immediately (instant)
+  try { localStorage.setItem('vwl_logs_cache', JSON.stringify(logs)); } catch(e) {}
+  // Then save to Firebase in background
   try {
     await setDoc(LOG_DOC, { logs, updatedAt: new Date().toISOString() });
   } catch(e) {
     console.error('Firebase save error:', e);
-    showToast('⚠️ Could not save — check connection');
+    showToast('⚠️ Could not save to cloud — saved locally');
   }
 }
 
@@ -1019,7 +1027,24 @@ if (sessionStorage.getItem('vwl_auth') === '1') {
 // ── INIT ──
 selectedDate = dateKey(new Date());
 document.getElementById('selectedDateDisplay').textContent = 'TODAY';
-loadLogs().then(() => renderCalendar());
+
+// Load from localStorage instantly first so app feels fast
+try {
+  const cached = localStorage.getItem('vwl_logs_cache');
+  if (cached) {
+    logs = JSON.parse(cached);
+    hideLoading();
+    renderCalendar();
+    showToast('📡 Syncing with database...');
+  }
+} catch(e) {}
+
+// Then sync with Firebase in background
+loadLogs().then(() => {
+  // Cache to localStorage for next time
+  try { localStorage.setItem('vwl_logs_cache', JSON.stringify(logs)); } catch(e) {}
+  renderCalendar();
+});
 
 </script>
 </body>
