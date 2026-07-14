@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Vineyard Work Log</title>
 <!-- Firebase v8 SDK - lightweight and fast -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -28,7 +28,7 @@
     --purple-light: #f3eeff;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; background:var(--light); color:var(--dark); min-height:100vh; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; background:var(--light); color:var(--dark); min-height:100vh; min-height:-webkit-fill-available; overflow-x:hidden; -webkit-text-size-adjust:100%; }
   @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
   @keyframes modalIn { from{opacity:0;transform:scale(.94) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
   @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:.85} }
@@ -433,6 +433,48 @@
 
   .preview-banner { background:var(--gold); color:var(--dark); text-align:center; padding:8px; font-size:12px; font-weight:700; }
 
+  /* DAY POPUP */
+  .day-popup-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 0;
+  }
+  .day-popup-overlay.open { display: flex; }
+
+  .day-popup {
+    background: white;
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    animation: slideUp .22s ease;
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); opacity:0; }
+    to   { transform: translateY(0);    opacity:1; }
+  }
+
+  .day-popup-header {
+    background: #4A3728;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .day-popup-date { font-family:"Arial Black",Arial,sans-serif; font-size:14px; letter-spacing:1px; color:#e9c46a; }
+  .day-popup-close { background:none; border:none; color:rgba(255,255,255,.6); font-size:22px; cursor:pointer; padding:0 4px; line-height:1; min-width:32px; min-height:32px; display:flex; align-items:center; justify-content:center; }
+  .day-popup-text { font-size:15px; color:#333; line-height:1.7; padding:16px 18px; max-height:45vh; overflow-y:auto; white-space:pre-wrap; -webkit-overflow-scrolling:touch; }
+  .day-popup-actions { display:flex; gap:10px; padding:12px 18px 8px; border-top:1px solid #eee; }
+  .day-popup-edit { flex:1; background:#4A3728; color:white; border:none; border-radius:10px; padding:13px 0; font-size:15px; font-weight:700; cursor:pointer; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
+  .day-popup-del { background:none; border:2px solid #ffb3b8; border-radius:10px; padding:13px 16px; font-size:15px; font-weight:700; color:#e63946; cursor:pointer; font-family:-apple-system,BlinkMacSystemFont,sans-serif; }
+
   @media (max-width:768px) {
     /* HEADER */
     .app-header { padding:16px; flex-direction:column; align-items:flex-start; gap:12px; }
@@ -580,6 +622,21 @@
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
       <button class="btn-print-report" onclick="printMonthReport()">🖨️ Print Month Report</button>
       <button class="btn-download-report" onclick="downloadMonthReport()">⬇️ Download Month Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- DAY POPUP -->
+<div class="day-popup-overlay" id="dayPopupOverlay" onclick="handlePopupOverlayClick(event)">
+  <div class="day-popup" id="dayPopup">
+    <div class="day-popup-header">
+      <span class="day-popup-date" id="popupDate"></span>
+      <button class="day-popup-close" onclick="closePopup()">✕</button>
+    </div>
+    <div class="day-popup-text" id="popupText"></div>
+    <div class="day-popup-actions">
+      <button class="day-popup-edit" onclick="popupEdit()">✏️ Edit</button>
+      <button class="day-popup-del" onclick="popupDelete()">🗑 Delete</button>
     </div>
   </div>
 </div>
@@ -752,6 +809,8 @@ function renderCalendar() {
   });
 }
 
+var popupKey = null;
+
 function clickDay(key) {
   selectedDate = key;
   const d = new Date(key.split('-')[0], key.split('-')[1]-1, key.split('-')[2]);
@@ -759,21 +818,53 @@ function clickDay(key) {
     d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
 
   if (logs[key]) {
-    // First tap expands, second tap opens modal
-    const el = document.querySelector(`.cal-day.has-log[data-key="${key}"]`);
-    if (el && el.classList.contains('expanded')) {
-      openModal(key);
-    } else {
-      // Collapse any other expanded day first
-      document.querySelectorAll('.cal-day.expanded').forEach(d => d.classList.remove('expanded'));
-      if (el) el.classList.add('expanded');
-    }
+    showDayPopup(key);
   } else {
+    closePopup();
     showToast('📅 Day selected — record or type your log above');
-    document.querySelectorAll('.cal-day.expanded').forEach(d => d.classList.remove('expanded'));
   }
   renderCalendar();
 }
+
+function showDayPopup(key) {
+  popupKey = key;
+  var d = new Date(key.split('-')[0], key.split('-')[1]-1, key.split('-')[2]);
+  document.getElementById('popupDate').textContent =
+    d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}).toUpperCase();
+  document.getElementById('popupText').textContent = logs[key] || '';
+  document.getElementById('dayPopupOverlay').classList.add('open');
+}
+
+function closePopup() {
+  document.getElementById('dayPopupOverlay').classList.remove('open');
+  popupKey = null;
+}
+window.closePopup = closePopup;
+
+function handlePopupOverlayClick(e) {
+  if (e.target === document.getElementById('dayPopupOverlay')) closePopup();
+}
+window.handlePopupOverlayClick = handlePopupOverlayClick;
+
+function popupEdit() {
+  if (!popupKey) return;
+  closePopup();
+  editLog(popupKey);
+}
+window.popupEdit = popupEdit;
+
+async function popupDelete() {
+  if (!popupKey) return;
+  var key = popupKey;
+  closePopup();
+  delete logs[key];
+  await saveLogs();
+  renderCalendar();
+  showToast('🗑 Log entry deleted');
+}
+window.popupDelete = popupDelete;
+
+
 
 function changeMonth(dir) {
   currentDate.setMonth(currentDate.getMonth() + dir);
